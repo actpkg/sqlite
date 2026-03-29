@@ -14,10 +14,10 @@ setup: init
     prek install
 
 build variant="sqlite":
-    CC={{cc}} cargo build --release {{ if variant == "sqlite-vec" { "--features vec" } else { "" } }}
+    CC="{{cc}}" cargo build --release {{ if variant == "sqlite-vec" { "--features vec" } else { "" } }}
 
 clippy variant="sqlite":
-    CC={{cc}} cargo clippy {{ if variant == "sqlite-vec" { "--features vec" } else { "" } }} -- -D warnings
+    CC="{{cc}}" cargo clippy {{ if variant == "sqlite-vec" { "--features vec" } else { "" } }} -- -D warnings
 
 test variant="sqlite":
     #!/usr/bin/env bash
