@@ -27,13 +27,7 @@ jobs:
           bins: wit-deps-cli, just
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: robinraju/release-downloader@v1
-        with:
-          repository: WebAssembly/wasi-sdk
-          latest: true
-          fileName: "wasi-sdk-*-x86_64-linux.deb"
-          out-file-path: /tmp
-      - run: sudo dpkg -i /tmp/wasi-sdk-*-x86_64-linux.deb
+      - uses: bytecodealliance/setup-wasi-sdk-action@v1
       - run: just init
       - run: just build ${{ matrix.name }}
       - run: cp target/wasm32-wasip2/release/component_sqlite.wasm ${{ matrix.artifact }}
@@ -90,13 +84,7 @@ jobs:
           bins: wit-deps-cli, just
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: robinraju/release-downloader@v1
-        with:
-          repository: WebAssembly/wasi-sdk
-          latest: true
-          fileName: "wasi-sdk-*-x86_64-linux.deb"
-          out-file-path: /tmp
-      - run: sudo dpkg -i /tmp/wasi-sdk-*-x86_64-linux.deb
+      - uses: bytecodealliance/setup-wasi-sdk-action@v1
       - run: just init
       - run: just clippy ${{ matrix.name }}
 
@@ -112,3 +100,38 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: cargo fmt -- --check
+
+  publish:
+    name: Publish (${{ matrix.name }})
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [e2e, clippy, fmt]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      matrix:
+        include:
+          - name: sqlite
+          - name: sqlite-vec
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.name }}
+      - run: mkdir -p target/wasm32-wasip2/release && mv component-*.wasm target/wasm32-wasip2/release/component_sqlite.wasm
+      - uses: actcore/act-cli/setup@main
+      - uses: oras-project/setup-oras@v1
+      - uses: moonrepo/setup-rust@v1
+        with:
+          bins: just
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: echo ${{ secrets.GITHUB_TOKEN }} | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+      - run: just publish ${{ matrix.name }}
+      - name: Attest
+        uses: actions/attest@v4
+        with:
+          subject-path: target/wasm32-wasip2/release/component_sqlite.wasm
+          push-to-registry: true

@@ -36,19 +36,19 @@ test variant="sqlite":
 publish variant="sqlite":
     #!/usr/bin/env bash
     set -euo pipefail
-    just build {{variant}}
     INFO=$({{act}} info {{wasm}} --format json)
     NAME=$(echo "$INFO" | jq -r .name)
     VERSION=$(echo "$INFO" | jq -r .version)
     DESC=$(echo "$INFO" | jq -r .description)
+    if {{oras}} manifest fetch "{{registry}}/$NAME:$VERSION" >/dev/null 2>&1; then
+      echo "$NAME:$VERSION already published, skipping"
+      exit 0
+    fi
+    SOURCE=$(git remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|git@github.com:|https://github.com/|' || echo "")
     {{oras}} push "{{registry}}/$NAME:$VERSION" \
       --config /dev/null:application/vnd.oci.empty.v1+json \
       --annotation "org.opencontainers.image.version=$VERSION" \
       --annotation "org.opencontainers.image.description=$DESC" \
+      --annotation "org.opencontainers.image.source=$SOURCE" \
       "{{wasm}}:application/wasm"
     {{oras}} tag "{{registry}}/$NAME:$VERSION" latest
-
-# Build + test + publish all variants
-release:
-    just publish sqlite
-    just publish sqlite-vec

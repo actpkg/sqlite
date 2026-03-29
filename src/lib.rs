@@ -62,7 +62,7 @@ struct Config {
     not(feature = "vec"),
     act_component(
         name = "sqlite",
-        version = "0.1.0",
+        version = "0.1.1",
         description = "SQLite database operations"
     )
 )]
@@ -70,7 +70,7 @@ struct Config {
     feature = "vec",
     act_component(
         name = "sqlite-vec",
-        version = "0.1.0",
+        version = "0.1.1",
         description = "SQLite database operations with vector search (sqlite-vec)"
     )
 )]
