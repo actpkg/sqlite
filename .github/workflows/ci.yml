@@ -23,7 +23,6 @@ jobs:
       - uses: actions/checkout@v6
       - uses: moonrepo/setup-rust@v1
         with:
-          channel: nightly
           bins: wit-deps-cli, just
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -54,18 +53,12 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.name }}
-      - uses: actcore/act-cli/setup@main
-      - uses: moonrepo/setup-rust@v1
-        with:
-          bins: hurl
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Test
         run: |
           DB_DIR=$(mktemp -d)
-          act run --http --listen 3000 ${{ matrix.artifact }} --allow-dir "/data:$DB_DIR" &
+          npx @actcore/act run --http --listen 3000 ${{ matrix.artifact }} --allow-dir "/data:$DB_DIR" &
           npx wait-on http://[::1]:3000/info
-          hurl --test --variable "baseurl=http://[::1]:3000" --variable "db_path=/data/test.db" ${{ matrix.hurl }}
+          npx @orangeopensource/hurl --test --variable "baseurl=http://[::1]:3000" --variable "db_path=/data/test.db" ${{ matrix.hurl }}
 
   clippy:
     name: Clippy (${{ matrix.name }})
@@ -79,8 +72,6 @@ jobs:
       - uses: actions/checkout@v6
       - uses: moonrepo/setup-rust@v1
         with:
-          channel: nightly
-          components: clippy
           bins: wit-deps-cli, just
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -94,11 +85,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: moonrepo/setup-rust@v1
-        with:
-          channel: nightly
-          components: rustfmt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: cargo fmt -- --check
 
   publish:
@@ -123,11 +109,7 @@ jobs:
       - run: mkdir -p target/wasm32-wasip2/release && mv component-*.wasm target/wasm32-wasip2/release/component_sqlite.wasm
       - uses: actcore/act-cli/setup@main
       - uses: oras-project/setup-oras@v1
-      - uses: moonrepo/setup-rust@v1
-        with:
-          bins: just
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: taiki-e/install-action@just
       - run: echo ${{ secrets.GITHUB_TOKEN }} | oras login ghcr.io -u ${{ github.actor }} --password-stdin
       - run: just publish ${{ matrix.name }}
       - name: Attest
