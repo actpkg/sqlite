@@ -27,7 +27,7 @@ jobs:
           bins: wit-deps-cli, just
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: bytecodealliance/setup-wasi-sdk-action@v1
+      - uses: bytecodealliance/setup-wasi-sdk-action@main
       - run: just init
       - run: just build ${{ matrix.name }}
       - run: cp target/wasm32-wasip2/release/component_sqlite.wasm ${{ matrix.artifact }}
@@ -84,7 +84,7 @@ jobs:
           bins: wit-deps-cli, just
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: bytecodealliance/setup-wasi-sdk-action@v1
+      - uses: bytecodealliance/setup-wasi-sdk-action@main
       - run: just init
       - run: just clippy ${{ matrix.name }}
 
