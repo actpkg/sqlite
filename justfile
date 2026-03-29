@@ -46,7 +46,7 @@ publish variant="sqlite":
     fi
     SOURCE=$(git remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|git@github.com:|https://github.com/|' || echo "")
     OUTPUT=$({{oras}} push "{{registry}}/$NAME:$VERSION" \
-      --config /dev/null:application/vnd.oci.empty.v1+json \
+      --artifact-type application/wasm \
       --annotation "org.opencontainers.image.version=$VERSION" \
       --annotation "org.opencontainers.image.description=$DESC" \
       --annotation "org.opencontainers.image.source=$SOURCE" \
