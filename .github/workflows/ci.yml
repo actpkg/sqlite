@@ -10,14 +10,20 @@ env:
 
 jobs:
   build:
-    name: Build
+    name: Build (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: sqlite
+            artifact: component-sqlite.wasm
+          - name: sqlite-vec
+            artifact: component-sqlite-vec.wasm
     steps:
       - uses: actions/checkout@v6
       - uses: moonrepo/setup-rust@v1
         with:
           channel: nightly
-          targets: wasm32-wasip2
           bins: wit-deps-cli, just
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -29,41 +35,59 @@ jobs:
           out-file-path: /tmp
       - run: sudo dpkg -i /tmp/wasi-sdk-*-x86_64-linux.deb
       - run: just init
-      - run: just build
+      - run: just build ${{ matrix.name }}
+      - run: cp target/wasm32-wasip2/release/component_sqlite.wasm ${{ matrix.artifact }}
       - uses: actions/upload-artifact@v7
         with:
-          name: component.wasm
-          path: target/wasm32-wasip2/release/*.wasm
+          name: ${{ matrix.name }}
+          path: ${{ matrix.artifact }}
 
   e2e:
-    name: E2E Test
+    name: E2E (${{ matrix.name }})
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: sqlite
+            artifact: component-sqlite.wasm
+            hurl: "e2e/*.hurl"
+          - name: sqlite-vec
+            artifact: component-sqlite-vec.wasm
+            hurl: "e2e/*.hurl e2e/vec/*.hurl"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v8
         with:
-          name: component.wasm
-          path: target/wasm32-wasip2/release/
+          name: ${{ matrix.name }}
       - uses: actcore/act-cli/setup@main
       - uses: moonrepo/setup-rust@v1
         with:
-          bins: just, hurl
+          bins: hurl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: just test
+      - name: Test
+        run: |
+          DB_DIR=$(mktemp -d)
+          act run --http --listen 3000 ${{ matrix.artifact }} --allow-dir "/data:$DB_DIR" &
+          npx wait-on http://[::1]:3000/info
+          hurl --test --variable "baseurl=http://[::1]:3000" --variable "db_path=/data/test.db" ${{ matrix.hurl }}
 
   clippy:
-    name: Clippy
+    name: Clippy (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: sqlite
+          - name: sqlite-vec
     steps:
       - uses: actions/checkout@v6
       - uses: moonrepo/setup-rust@v1
         with:
           channel: nightly
-          targets: wasm32-wasip2
           components: clippy
-          bins: wit-deps-cli
+          bins: wit-deps-cli, just
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: robinraju/release-downloader@v1
@@ -73,8 +97,8 @@ jobs:
           fileName: "wasi-sdk-*-x86_64-linux.deb"
           out-file-path: /tmp
       - run: sudo dpkg -i /tmp/wasi-sdk-*-x86_64-linux.deb
-      - run: wit-deps
-      - run: CC=/opt/wasi-sdk/bin/clang cargo clippy --target wasm32-wasip2 -- -D warnings
+      - run: just init
+      - run: just clippy ${{ matrix.name }}
 
   fmt:
     name: Format

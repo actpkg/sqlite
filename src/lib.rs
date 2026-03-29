@@ -3,16 +3,33 @@ use base64::Engine;
 use rusqlite::{Connection, params_from_iter, types::Value};
 use std::sync::Mutex;
 
+#[cfg(feature = "vec")]
+use {rusqlite::ffi::sqlite3_auto_extension, std::sync::Once};
+
 static DB: Mutex<Option<Connection>> = Mutex::new(None);
+
+#[cfg(feature = "vec")]
+static VEC_INIT: Once = Once::new();
+
+#[cfg(feature = "vec")]
+fn ensure_vec_extension() {
+    VEC_INIT.call_once(|| unsafe {
+        sqlite3_auto_extension(Some(std::mem::transmute(
+            sqlite_vec::sqlite3_vec_init as *const (),
+        )));
+    });
+}
 
 fn get_or_open_db(path: &str) -> ActResult<()> {
     let mut guard = DB
         .lock()
         .map_err(|e| ActError::internal(format!("Lock error: {e}")))?;
     if guard.is_none() {
+        #[cfg(feature = "vec")]
+        ensure_vec_extension();
+
         let conn = Connection::open(path)
             .map_err(|e| ActError::internal(format!("Cannot open database: {e}")))?;
-        // Enable WAL mode for better concurrent access
         conn.execute_batch("PRAGMA journal_mode=WAL;")
             .map_err(|e| ActError::internal(format!("PRAGMA error: {e}")))?;
         *guard = Some(conn);
@@ -37,10 +54,24 @@ struct Config {
     database_path: String,
 }
 
-#[act_component(
-    name = "sqlite",
-    version = "0.1.0",
-    description = "SQLite database operations"
+// ── Component definition ─────────────────────────────────────────────────────
+// Feature flag changes the component name and description only.
+
+#[cfg_attr(
+    not(feature = "vec"),
+    act_component(
+        name = "sqlite",
+        version = "0.1.0",
+        description = "SQLite database operations"
+    )
+)]
+#[cfg_attr(
+    feature = "vec",
+    act_component(
+        name = "sqlite-vec",
+        version = "0.1.0",
+        description = "SQLite database operations with vector search (sqlite-vec)"
+    )
 )]
 mod component {
     use super::*;
@@ -143,7 +174,6 @@ mod component {
     ) -> ActResult<String> {
         let path = ctx.metadata().database_path.clone();
         with_db(&path, |conn| {
-            // Validate table name exists
             let exists: bool = conn.query_row(
                 "SELECT COUNT(*) > 0 FROM sqlite_master WHERE name = ?1 AND type IN ('table', 'view')",
                 [&table],
@@ -182,7 +212,6 @@ mod component {
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| ActError::internal(format!("Row error: {e}")))?;
 
-            // Also get CREATE TABLE statement
             let create_sql: String = conn
                 .query_row(
                     "SELECT sql FROM sqlite_master WHERE name = ?1",
@@ -215,6 +244,8 @@ mod component {
     }
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
 fn json_params_to_sqlite(params: Option<&[serde_json::Value]>) -> ActResult<Vec<Value>> {
     let Some(params) = params else {
         return Ok(vec![]);
@@ -234,8 +265,22 @@ fn json_params_to_sqlite(params: Option<&[serde_json::Value]>) -> ActResult<Vec<
                 }
             }
             serde_json::Value::String(s) => Ok(Value::Text(s.clone())),
+            // JSON array of numbers → f32 blob (for sqlite-vec vector params)
+            serde_json::Value::Array(arr) => {
+                let floats: Result<Vec<f32>, _> = arr
+                    .iter()
+                    .map(|v| {
+                        v.as_f64().map(|f| f as f32).ok_or_else(|| {
+                            ActError::invalid_args("Vector elements must be numbers")
+                        })
+                    })
+                    .collect();
+                let floats = floats?;
+                let bytes: Vec<u8> = floats.iter().flat_map(|f| f.to_le_bytes()).collect();
+                Ok(Value::Blob(bytes))
+            }
             _ => Err(ActError::invalid_args(
-                "Only scalar values supported as params",
+                "Unsupported param type (use scalars or number arrays for vectors)",
             )),
         })
         .collect()

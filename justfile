@@ -1,6 +1,8 @@
 wasm := "target/wasm32-wasip2/release/component_sqlite.wasm"
 act := env("ACT", "act")
 cc := env("CC", "/opt/wasi-sdk/bin/clang")
+oras := env("ORAS", "oras")
+registry := env("OCI_REGISTRY", "ghcr.io/actpkg")
 port := `python3 -c 'import socket; s=socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.bind(("", 0)); print(s.getsockname()[1]); s.close()'`
 addr := "[::1]:" + port
 baseurl := "http://" + addr
@@ -11,17 +13,42 @@ init:
 setup: init
     prek install
 
-build:
-    CC={{cc}} cargo build --target wasm32-wasip2 --release
+build variant="sqlite":
+    CC={{cc}} cargo build --release {{ if variant == "sqlite-vec" { "--features vec" } else { "" } }}
 
-clippy:
-    CC={{cc}} cargo clippy --target wasm32-wasip2 -- -D warnings
+clippy variant="sqlite":
+    CC={{cc}} cargo clippy {{ if variant == "sqlite-vec" { "--features vec" } else { "" } }} -- -D warnings
 
-test:
+test variant="sqlite":
     #!/usr/bin/env bash
+    set -euo pipefail
+    just build {{variant}}
     DB_DIR=$(mktemp -d)
-    DB_PATH="$DB_DIR/test.db"
-    {{act}} serve {{wasm}} --listen "{{addr}}" --allow-dir "/data:$DB_DIR" &
+    {{act}} run --http --listen "{{addr}}" {{wasm}} --allow-dir "/data:$DB_DIR" &
     trap "kill $!; rm -rf $DB_DIR" EXIT
     npx wait-on {{baseurl}}/info
-    hurl --test --variable "baseurl={{baseurl}}" --variable "db_path=/data/test.db" e2e/*.hurl
+    if [ "{{variant}}" = "sqlite-vec" ]; then
+      hurl --test --variable "baseurl={{baseurl}}" --variable "db_path=/data/test.db" e2e/*.hurl e2e/vec/*.hurl
+    else
+      hurl --test --variable "baseurl={{baseurl}}" --variable "db_path=/data/test.db" e2e/*.hurl
+    fi
+
+publish variant="sqlite":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just build {{variant}}
+    INFO=$({{act}} info {{wasm}} --format json)
+    NAME=$(echo "$INFO" | jq -r .name)
+    VERSION=$(echo "$INFO" | jq -r .version)
+    DESC=$(echo "$INFO" | jq -r .description)
+    {{oras}} push "{{registry}}/$NAME:$VERSION" \
+      --config /dev/null:application/vnd.oci.empty.v1+json \
+      --annotation "org.opencontainers.image.version=$VERSION" \
+      --annotation "org.opencontainers.image.description=$DESC" \
+      "{{wasm}}:application/wasm"
+    {{oras}} tag "{{registry}}/$NAME:$VERSION" latest
+
+# Build + test + publish all variants
+release:
+    just publish sqlite
+    just publish sqlite-vec

@@ -3,6 +3,10 @@ name = "component-sqlite"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+vec = ["dep:sqlite-vec"]
+
 [dependencies]
 act-sdk = "0.2.4"
 wit-bindgen = { version = "0.54", features = ["async-spawn"] }
@@ -11,6 +15,7 @@ schemars = "1"
 serde_json = "1"
 base64 = "0.22"
 rusqlite = { version = "0.39.0", features = ["bundled"] }
+sqlite-vec = { version = "0.1.6", optional = true }
 
 [lib]
 crate-type = ["cdylib"]
