@@ -56,6 +56,6 @@ publish variant="sqlite":
     {{oras}} tag "{{registry}}/$NAME:$VERSION" latest
     # Output for CI (GITHUB_OUTPUT)
     if [ -n "${GITHUB_OUTPUT:-}" ]; then
-      echo "image={{registry}}/$NAME:$VERSION" >> "$GITHUB_OUTPUT"
+      echo "image={{registry}}/$NAME" >> "$GITHUB_OUTPUT"
       echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
     fi
