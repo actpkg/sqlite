@@ -45,10 +45,17 @@ publish variant="sqlite":
       exit 0
     fi
     SOURCE=$(git remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|git@github.com:|https://github.com/|' || echo "")
-    {{oras}} push "{{registry}}/$NAME:$VERSION" \
+    OUTPUT=$({{oras}} push "{{registry}}/$NAME:$VERSION" \
       --config /dev/null:application/vnd.oci.empty.v1+json \
       --annotation "org.opencontainers.image.version=$VERSION" \
       --annotation "org.opencontainers.image.description=$DESC" \
       --annotation "org.opencontainers.image.source=$SOURCE" \
-      "{{wasm}}:application/wasm"
+      "{{wasm}}:application/wasm" 2>&1)
+    echo "$OUTPUT"
+    DIGEST=$(echo "$OUTPUT" | grep "^Digest:" | awk '{print $2}')
     {{oras}} tag "{{registry}}/$NAME:$VERSION" latest
+    # Output for CI (GITHUB_OUTPUT)
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then
+      echo "image={{registry}}/$NAME:$VERSION" >> "$GITHUB_OUTPUT"
+      echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+    fi
