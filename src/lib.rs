@@ -3,6 +3,8 @@ use base64::Engine;
 use rusqlite::{Connection, params_from_iter, types::Value};
 use std::sync::Mutex;
 
+act_sdk::embed_skill!("skill/");
+
 #[cfg(feature = "vec")]
 use {rusqlite::ffi::sqlite3_auto_extension, std::sync::Once};
 
