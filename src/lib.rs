@@ -58,19 +58,11 @@ struct Config {
 // ── Component definition ─────────────────────────────────────────────────────
 // Feature flag changes the component name and description only.
 
-#[cfg_attr(
-    not(feature = "vec"),
-    act_component(
-        name = "sqlite",
-        version = "0.1.1",
-        description = "SQLite database operations"
-    )
-)]
+#[cfg_attr(not(feature = "vec"), act_component)]
 #[cfg_attr(
     feature = "vec",
     act_component(
         name = "sqlite-vec",
-        version = "0.1.1",
         description = "SQLite database operations with vector search (sqlite-vec)"
     )
 )]
