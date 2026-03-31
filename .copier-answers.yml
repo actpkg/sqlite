@@ -1,6 +1,6 @@
-_commit: 36741aa
+_commit: 80d5564
 _src_path: https://github.com/actcore/act-component-template
-project_name: sqlite
 description: SQLite database operations
-needs_http: false
 needs_filesystem: true
+needs_http: false
+project_name: sqlite
