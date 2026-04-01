@@ -9,7 +9,7 @@ default = []
 vec = ["dep:sqlite-vec"]
 
 [dependencies]
-act-sdk = "0.2"
+act-sdk = { version = "0.2", path = "../../act-sdk-rs/act-sdk" }
 wit-bindgen = { version = "0.54", features = ["async-spawn"] }
 serde = { version = "1", features = ["derive"] }
 schemars = "1"

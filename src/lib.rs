@@ -71,16 +71,16 @@ struct Config {
 mod component {
     use super::*;
 
-    /// Execute a SELECT query and return results as JSON.
+    /// Execute a SELECT query and return results as structured data.
     #[act_tool(
-        description = "Execute a read-only SQL query (SELECT) and return results as JSON array",
+        description = "Execute a read-only SQL query (SELECT) and return results as array of row objects",
         read_only
     )]
     fn query(
         #[doc = "SQL SELECT query to execute"] sql: String,
         #[doc = "Query parameters as JSON array (optional)"] params: Option<Vec<serde_json::Value>>,
         ctx: &mut ActContext<Config>,
-    ) -> ActResult<String> {
+    ) -> ActResult<Vec<serde_json::Value>> {
         let path = ctx.metadata().database_path.clone();
         with_db(&path, |conn| {
             let param_values = json_params_to_sqlite(params.as_deref())?;
@@ -104,8 +104,7 @@ mod component {
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| ActError::internal(format!("Row error: {e}")))?;
 
-            serde_json::to_string_pretty(&rows)
-                .map_err(|e| ActError::internal(format!("JSON error: {e}")))
+            Ok(rows)
         })
     }
 
@@ -119,7 +118,7 @@ mod component {
             Vec<serde_json::Value>,
         >,
         ctx: &mut ActContext<Config>,
-    ) -> ActResult<String> {
+    ) -> ActResult<serde_json::Value> {
         let path = ctx.metadata().database_path.clone();
         with_db(&path, |conn| {
             let param_values = json_params_to_sqlite(params.as_deref())?;
@@ -129,14 +128,13 @@ mod component {
             Ok(serde_json::json!({
                 "rows_affected": affected,
                 "last_insert_rowid": conn.last_insert_rowid(),
-            })
-            .to_string())
+            }))
         })
     }
 
     /// List all tables in the database.
     #[act_tool(description = "List all tables in the SQLite database", read_only)]
-    fn list_tables(ctx: &mut ActContext<Config>) -> ActResult<String> {
+    fn list_tables(ctx: &mut ActContext<Config>) -> ActResult<Vec<serde_json::Value>> {
         let path = ctx.metadata().database_path.clone();
         with_db(&path, |conn| {
             let mut stmt = conn.prepare(
@@ -153,8 +151,7 @@ mod component {
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| ActError::internal(format!("Row error: {e}")))?;
 
-            serde_json::to_string_pretty(&tables)
-                .map_err(|e| ActError::internal(format!("JSON error: {e}")))
+            Ok(tables)
         })
     }
 
@@ -166,7 +163,7 @@ mod component {
     fn describe_table(
         #[doc = "Table name to describe"] table: String,
         ctx: &mut ActContext<Config>,
-    ) -> ActResult<String> {
+    ) -> ActResult<serde_json::Value> {
         let path = ctx.metadata().database_path.clone();
         with_db(&path, |conn| {
             let exists: bool = conn.query_row(
@@ -215,12 +212,11 @@ mod component {
                 )
                 .unwrap_or_default();
 
-            serde_json::to_string_pretty(&serde_json::json!({
+            Ok(serde_json::json!({
                 "table": table,
                 "columns": columns,
                 "create_sql": create_sql,
             }))
-            .map_err(|e| ActError::internal(format!("JSON error: {e}")))
         })
     }
 
@@ -229,12 +225,12 @@ mod component {
     fn execute_batch(
         #[doc = "SQL statements separated by semicolons"] sql: String,
         ctx: &mut ActContext<Config>,
-    ) -> ActResult<String> {
+    ) -> ActResult<serde_json::Value> {
         let path = ctx.metadata().database_path.clone();
         with_db(&path, |conn| {
             conn.execute_batch(&sql)
                 .map_err(|e| ActError::invalid_args(format!("SQL error: {e}")))?;
-            Ok(r#"{"status": "ok"}"#.to_string())
+            Ok(serde_json::json!({"status": "ok"}))
         })
     }
 }
