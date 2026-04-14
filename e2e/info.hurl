@@ -1,4 +1,4 @@
 GET {{baseurl}}/info
 HTTP 200
 [Asserts]
-jsonpath "$['std:name']" matches "^sqlite"
+jsonpath "$.std.name" matches "^sqlite"
