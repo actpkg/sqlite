@@ -1,3 +1,4 @@
 [std]
+name = "sqlite"
 
 [std.capabilities."wasi:filesystem"]
