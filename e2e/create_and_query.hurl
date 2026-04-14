@@ -14,7 +14,7 @@ POST {{baseurl}}/tools/execute
 }
 HTTP 200
 [Asserts]
-jsonpath "$.content[0].data" contains "\"rows_affected\":1"
+jsonpath "$.content[0].data.rows_affected" == 1
 
 # Query
 POST {{baseurl}}/tools/query
@@ -24,5 +24,5 @@ POST {{baseurl}}/tools/query
 }
 HTTP 200
 [Asserts]
-jsonpath "$.content[0].data" contains "Alice"
-jsonpath "$.content[0].data" contains "30"
+jsonpath "$.content[0].data[0].name" == "Alice"
+jsonpath "$.content[0].data[0].age" == 30

@@ -5,4 +5,4 @@ POST {{baseurl}}/tools/execute-batch
 }
 HTTP 200
 [Asserts]
-jsonpath "$.content[0].data" contains "ok"
+jsonpath "$.content[0].data.status" == "ok"

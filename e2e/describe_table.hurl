@@ -14,8 +14,8 @@ POST {{baseurl}}/tools/describe-table
 }
 HTTP 200
 [Asserts]
-jsonpath "$.content[0].data" contains "\"name\""
-jsonpath "$.content[0].data" contains "\"price\""
+jsonpath "$.content[0].data.columns[*].name" contains "name"
+jsonpath "$.content[0].data.columns[*].name" contains "price"
 
 # Non-existent table
 POST {{baseurl}}/tools/describe-table

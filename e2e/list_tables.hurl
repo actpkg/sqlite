@@ -13,4 +13,4 @@ POST {{baseurl}}/tools/list-tables
 }
 HTTP 200
 [Asserts]
-jsonpath "$.content[0].data" contains "test_list"
+jsonpath "$.content[0].data[*].name" contains "test_list"
