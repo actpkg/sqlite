@@ -111,7 +111,7 @@ jobs:
           name: ${{ matrix.name }}
       - run: mkdir -p target/wasm32-wasip2/release && mv component-*.wasm target/wasm32-wasip2/release/component_sqlite.wasm
       - uses: actcore/act-cli/setup@main
-      - uses: oras-project/setup-oras@v1
+      - uses: oras-project/setup-oras@v2
       - uses: taiki-e/install-action@just
       - run: echo ${{ secrets.GITHUB_TOKEN }} | oras login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Publish
