@@ -1,5 +1,5 @@
 wasm := "target/wasm32-wasip2/release/component_sqlite.wasm"
-act := env("ACT", "act")
+act := env("ACT", "npx @actcore/act")
 cc := env("CC", "/opt/wasi-sdk/bin/clang")
 oras := env("ORAS", "oras")
 registry := env("OCI_REGISTRY", "ghcr.io/actpkg")
