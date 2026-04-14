@@ -26,7 +26,7 @@ test variant="sqlite":
     DB_DIR=$(mktemp -d)
     {{act}} run --http --listen "{{addr}}" {{wasm}} --allow-dir "/data:$DB_DIR" &
     trap "kill $!; rm -rf $DB_DIR" EXIT
-    npx wait-on {{baseurl}}/info
+    npx wait-on -t 180s {{baseurl}}/info
     if [ "{{variant}}" = "sqlite-vec" ]; then
       hurl --test --variable "baseurl={{baseurl}}" --variable "db_path=/data/test.db" e2e/*.hurl e2e/vec/*.hurl
     else
