@@ -14,7 +14,7 @@ POST {{baseurl}}/tools/execute
 }
 HTTP 200
 [Asserts]
-jsonpath "$.content[0].data" contains "\"rows_affected\":1"
+jsonpath "$.content[0].data.rows_affected" == 1
 
 POST {{baseurl}}/tools/execute
 {
@@ -39,7 +39,7 @@ POST {{baseurl}}/tools/query
 HTTP 200
 [Asserts]
 # Nearest should be rowid 1 (the [1,0,0,0] vector)
-jsonpath "$.content[0].data" contains "\"rowid\": 1"
+jsonpath "$.content[0].data[0].rowid" == 1
 
 # Verify vec_version() works
 POST {{baseurl}}/tools/query
@@ -49,4 +49,4 @@ POST {{baseurl}}/tools/query
 }
 HTTP 200
 [Asserts]
-jsonpath "$.content[0].data" contains "v0."
+jsonpath "$.content[0].data[0]['vec_version()']" startsWith "v0."
