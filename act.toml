@@ -2,3 +2,8 @@
 name = "sqlite"
 
 [std.capabilities."wasi:filesystem"]
+description = "Stores and queries SQLite databases on disk."
+
+[[std.capabilities."wasi:filesystem".allow]]
+path = "**"
+mode = "rw"
