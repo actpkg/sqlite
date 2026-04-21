@@ -26,13 +26,14 @@ test variant="sqlite":
     set -euo pipefail
     just build {{variant}}
     DB_DIR=$(mktemp -d)
-    {{act}} run --http --listen "{{addr}}" {{wasm}} --allow-dir "/data:$DB_DIR" &
+    {{act}} run --http --listen "{{addr}}" {{wasm}} \
+      --fs-policy allowlist --fs-allow "$DB_DIR/**" &
     trap "kill $!; rm -rf $DB_DIR" EXIT
     npx wait-on -t 180s {{baseurl}}/info
     if [ "{{variant}}" = "sqlite-vec" ]; then
-      {{hurl}} --test --variable "baseurl={{baseurl}}" --variable "db_path=/data/test.db" e2e/*.hurl e2e/vec/*.hurl
+      {{hurl}} --test --variable "baseurl={{baseurl}}" --variable "db_path=$DB_DIR/test.db" e2e/*.hurl e2e/vec/*.hurl
     else
-      {{hurl}} --test --variable "baseurl={{baseurl}}" --variable "db_path=/data/test.db" e2e/*.hurl
+      {{hurl}} --test --variable "baseurl={{baseurl}}" --variable "db_path=$DB_DIR/test.db" e2e/*.hurl
     fi
 
 publish variant="sqlite":
