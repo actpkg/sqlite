@@ -7,7 +7,7 @@ POST {{baseurl}}/tools/execute
 HTTP 200
 
 # Describe it
-POST {{baseurl}}/tools/describe-table
+POST {{baseurl}}/tools/describe_table
 {
   "arguments": {"table": "products"},
   "metadata": {"database_path": "{{db_path}}"}
@@ -18,7 +18,7 @@ jsonpath "$.content[0].data.columns[*].name" contains "name"
 jsonpath "$.content[0].data.columns[*].name" contains "price"
 
 # Non-existent table
-POST {{baseurl}}/tools/describe-table
+POST {{baseurl}}/tools/describe_table
 {
   "arguments": {"table": "nonexistent"},
   "metadata": {"database_path": "{{db_path}}"}

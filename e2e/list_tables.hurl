@@ -6,7 +6,7 @@ POST {{baseurl}}/tools/execute
 }
 HTTP 200
 
-POST {{baseurl}}/tools/list-tables
+POST {{baseurl}}/tools/list_tables
 {
   "arguments": {},
   "metadata": {"database_path": "{{db_path}}"}
