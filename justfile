@@ -27,7 +27,7 @@ test variant="sqlite":
     just build {{variant}}
     DB_DIR=$(mktemp -d)
     {{act}} run --http --listen "{{addr}}" {{wasm}} \
-      --fs-policy allowlist --fs-allow /dev/urandom --fs-allow "$DB_DIR/test.db" &
+      --fs-policy allowlist --fs-allow /dev/urandom --fs-allow "$DB_DIR" &
     trap "kill $!; rm -rf $DB_DIR" EXIT
     npx wait-on -t 180s {{baseurl}}/info
     if [ "{{variant}}" = "sqlite-vec" ]; then
