@@ -143,7 +143,7 @@ dependencies = [
 
 [[package]]
 name = "component-sqlite"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "act-sdk",
  "base64",
