@@ -59,9 +59,13 @@ jobs:
       - name: Test
         run: |
           DB_DIR=$(mktemp -d)
-          npx @actcore/act run --http --listen 3000 ${{ matrix.artifact }} --allow-dir "/data:$DB_DIR" &
-          npx wait-on http://[::1]:3000/info
-          npx @orangeopensource/hurl --test --variable "baseurl=http://[::1]:3000" --variable "db_path=/data/test.db" ${{ matrix.hurl }}
+          npx @actcore/act run --http --listen 3000 ${{ matrix.artifact }} \
+            --fs-policy allowlist --fs-allow "$DB_DIR" &
+          npx wait-on -t 180s http://[::1]:3000/info
+          npx @orangeopensource/hurl --test \
+            --variable "baseurl=http://[::1]:3000" \
+            --variable "db_path=$DB_DIR/test.db" \
+            ${{ matrix.hurl }}
 
   clippy:
     name: Clippy (${{ matrix.name }})
