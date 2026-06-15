@@ -1,5 +1,5 @@
 use act_sdk::prelude::*;
-use base64::Engine;
+use ciborium::value::Value as Cv;
 use rusqlite::{Connection, params_from_iter, types::Value};
 use std::sync::Mutex;
 
@@ -78,32 +78,29 @@ mod component {
     )]
     fn query(
         #[doc = "SQL SELECT query to execute"] sql: String,
-        #[doc = "Query parameters as JSON array (optional)"] params: Option<Vec<serde_json::Value>>,
+        #[doc = "Query parameters as array (optional)"] params: Option<Vec<SqlValue>>,
         ctx: &mut ActContext<Config>,
-    ) -> ActResult<Vec<serde_json::Value>> {
+    ) -> ActResult<Vec<Cv>> {
         let path = ctx.metadata().database_path.clone();
         with_db(&path, |conn| {
-            let param_values = json_params_to_sqlite(params.as_deref())?;
+            let param_values = cbor_params_to_sqlite(params.as_deref())?;
             let mut stmt = conn
                 .prepare(&sql)
                 .map_err(|e| ActError::invalid_args(format!("SQL error: {e}")))?;
-
             let column_names: Vec<String> =
                 stmt.column_names().iter().map(|s| s.to_string()).collect();
-
-            let rows: Vec<serde_json::Value> = stmt
+            let rows: Vec<Cv> = stmt
                 .query_map(params_from_iter(param_values.iter()), |row| {
-                    let mut obj = serde_json::Map::new();
+                    let mut pairs: Vec<(Cv, Cv)> = Vec::with_capacity(column_names.len());
                     for (i, name) in column_names.iter().enumerate() {
                         let val: Value = row.get(i)?;
-                        obj.insert(name.clone(), sqlite_value_to_json(&val));
+                        pairs.push((Cv::Text(name.clone()), sqlite_value_to_cbor(&val)));
                     }
-                    Ok(serde_json::Value::Object(obj))
+                    Ok(Cv::Map(pairs))
                 })
                 .map_err(|e| ActError::internal(format!("Query error: {e}")))?
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| ActError::internal(format!("Row error: {e}")))?;
-
             Ok(rows)
         })
     }
@@ -114,38 +111,39 @@ mod component {
     )]
     fn execute(
         #[doc = "SQL statement to execute"] sql: String,
-        #[doc = "Statement parameters as JSON array (optional)"] params: Option<
-            Vec<serde_json::Value>,
-        >,
+        #[doc = "Statement parameters as array (optional)"] params: Option<Vec<SqlValue>>,
         ctx: &mut ActContext<Config>,
-    ) -> ActResult<serde_json::Value> {
+    ) -> ActResult<Cv> {
         let path = ctx.metadata().database_path.clone();
         with_db(&path, |conn| {
-            let param_values = json_params_to_sqlite(params.as_deref())?;
+            let param_values = cbor_params_to_sqlite(params.as_deref())?;
             let affected = conn
                 .execute(&sql, params_from_iter(param_values.iter()))
                 .map_err(|e| ActError::invalid_args(format!("SQL error: {e}")))?;
-            Ok(serde_json::json!({
-                "rows_affected": affected,
-                "last_insert_rowid": conn.last_insert_rowid(),
-            }))
+            Ok(cbor_obj(vec![
+                ("rows_affected", Cv::from(affected as i64)),
+                ("last_insert_rowid", Cv::from(conn.last_insert_rowid())),
+            ]))
         })
     }
 
     /// List all tables in the database.
     #[act_tool(description = "List all tables in the SQLite database", read_only)]
-    fn list_tables(ctx: &mut ActContext<Config>) -> ActResult<Vec<serde_json::Value>> {
+    fn list_tables(ctx: &mut ActContext<Config>) -> ActResult<Vec<Cv>> {
         let path = ctx.metadata().database_path.clone();
         with_db(&path, |conn| {
             let mut stmt = conn.prepare(
                 "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name"
             ).map_err(|e| ActError::internal(format!("SQL error: {e}")))?;
 
-            let tables: Vec<serde_json::Value> = stmt
+            let tables: Vec<Cv> = stmt
                 .query_map([], |row| {
                     let name: String = row.get(0)?;
                     let typ: String = row.get(1)?;
-                    Ok(serde_json::json!({"name": name, "type": typ}))
+                    Ok(cbor_obj(vec![
+                        ("name", Cv::from(name)),
+                        ("type", Cv::from(typ)),
+                    ]))
                 })
                 .map_err(|e| ActError::internal(format!("Query error: {e}")))?
                 .collect::<Result<Vec<_>, _>>()
@@ -163,7 +161,7 @@ mod component {
     fn describe_table(
         #[doc = "Table name to describe"] table: String,
         ctx: &mut ActContext<Config>,
-    ) -> ActResult<serde_json::Value> {
+    ) -> ActResult<Cv> {
         let path = ctx.metadata().database_path.clone();
         with_db(&path, |conn| {
             let exists: bool = conn.query_row(
@@ -183,7 +181,7 @@ mod component {
                 ))
                 .map_err(|e| ActError::internal(format!("SQL error: {e}")))?;
 
-            let columns: Vec<serde_json::Value> = stmt
+            let columns: Vec<Cv> = stmt
                 .query_map([], |row| {
                     let cid: i64 = row.get(0)?;
                     let name: String = row.get(1)?;
@@ -191,14 +189,14 @@ mod component {
                     let notnull: bool = row.get(3)?;
                     let default: Value = row.get(4)?;
                     let pk: bool = row.get(5)?;
-                    Ok(serde_json::json!({
-                        "cid": cid,
-                        "name": name,
-                        "type": col_type,
-                        "notnull": notnull,
-                        "default": sqlite_value_to_json(&default),
-                        "primary_key": pk,
-                    }))
+                    Ok(cbor_obj(vec![
+                        ("cid", Cv::from(cid)),
+                        ("name", Cv::from(name)),
+                        ("type", Cv::from(col_type)),
+                        ("notnull", Cv::from(notnull)),
+                        ("default", sqlite_value_to_cbor(&default)),
+                        ("primary_key", Cv::from(pk)),
+                    ]))
                 })
                 .map_err(|e| ActError::internal(format!("Query error: {e}")))?
                 .collect::<Result<Vec<_>, _>>()
@@ -212,11 +210,11 @@ mod component {
                 )
                 .unwrap_or_default();
 
-            Ok(serde_json::json!({
-                "table": table,
-                "columns": columns,
-                "create_sql": create_sql,
-            }))
+            Ok(cbor_obj(vec![
+                ("table", Cv::from(table)),
+                ("columns", Cv::Array(columns)),
+                ("create_sql", Cv::from(create_sql)),
+            ]))
         })
     }
 
@@ -225,64 +223,103 @@ mod component {
     fn execute_batch(
         #[doc = "SQL statements separated by semicolons"] sql: String,
         ctx: &mut ActContext<Config>,
-    ) -> ActResult<serde_json::Value> {
+    ) -> ActResult<Cv> {
         let path = ctx.metadata().database_path.clone();
         with_db(&path, |conn| {
             conn.execute_batch(&sql)
                 .map_err(|e| ActError::invalid_args(format!("SQL error: {e}")))?;
-            Ok(serde_json::json!({"status": "ok"}))
+            Ok(cbor_obj(vec![("status", Cv::from("ok"))]))
         })
     }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-fn json_params_to_sqlite(params: Option<&[serde_json::Value]>) -> ActResult<Vec<Value>> {
+/// A SQL bind value. Wraps a dynamic CBOR value so a `BLOB` parameter arrives as
+/// a byte string. `ciborium::value::Value` has no `JsonSchema`, so this newtype
+/// supplies a permissive one.
+struct SqlValue(Cv);
+
+impl<'de> serde::Deserialize<'de> for SqlValue {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(SqlValue(Cv::deserialize(deserializer)?))
+    }
+}
+
+impl schemars::JsonSchema for SqlValue {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "SqlValue".into()
+    }
+    fn inline_schema() -> bool {
+        true
+    }
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        // Any SQL value: null / integer / real / text / boolean, or binary as a
+        // {"$bytes":"<base64>"} object (host-projected to a CBOR byte string).
+        schemars::json_schema!({})
+    }
+}
+
+/// Build a CBOR map (object) from string-keyed pairs.
+fn cbor_obj(pairs: Vec<(&str, Cv)>) -> Cv {
+    Cv::Map(
+        pairs
+            .into_iter()
+            .map(|(k, v)| (Cv::Text(k.to_string()), v))
+            .collect(),
+    )
+}
+
+/// rusqlite value → CBOR value. `BLOB` becomes a byte string (no base64).
+fn sqlite_value_to_cbor(val: &Value) -> Cv {
+    match val {
+        Value::Null => Cv::Null,
+        Value::Integer(i) => Cv::Integer((*i).into()),
+        Value::Real(f) => Cv::Float(*f),
+        Value::Text(s) => Cv::Text(s.clone()),
+        Value::Blob(b) => Cv::Bytes(b.clone()),
+    }
+}
+
+/// CBOR bind values → rusqlite values. A byte string binds as a `BLOB`; a numeric
+/// array binds as an f32 little-endian blob (for sqlite-vec vectors).
+fn cbor_params_to_sqlite(params: Option<&[SqlValue]>) -> ActResult<Vec<Value>> {
     let Some(params) = params else {
         return Ok(vec![]);
     };
     params
         .iter()
-        .map(|v| match v {
-            serde_json::Value::Null => Ok(Value::Null),
-            serde_json::Value::Bool(b) => Ok(Value::Integer(if *b { 1 } else { 0 })),
-            serde_json::Value::Number(n) => {
-                if let Some(i) = n.as_i64() {
-                    Ok(Value::Integer(i))
-                } else if let Some(f) = n.as_f64() {
-                    Ok(Value::Real(f))
-                } else {
-                    Err(ActError::invalid_args("Unsupported number type"))
-                }
+        .map(|p| match &p.0 {
+            Cv::Null => Ok(Value::Null),
+            Cv::Bool(b) => Ok(Value::Integer(if *b { 1 } else { 0 })),
+            Cv::Integer(i) => {
+                let n: i128 = (*i).into();
+                i64::try_from(n)
+                    .map(Value::Integer)
+                    .map_err(|_| ActError::invalid_args("Integer out of range"))
             }
-            serde_json::Value::String(s) => Ok(Value::Text(s.clone())),
-            // JSON array of numbers → f32 blob (for sqlite-vec vector params)
-            serde_json::Value::Array(arr) => {
+            Cv::Float(f) => Ok(Value::Real(*f)),
+            Cv::Text(s) => Ok(Value::Text(s.clone())),
+            Cv::Bytes(b) => Ok(Value::Blob(b.clone())),
+            // Numeric array → f32 blob (sqlite-vec vector params).
+            Cv::Array(arr) => {
                 let floats: Result<Vec<f32>, _> = arr
                     .iter()
-                    .map(|v| {
-                        v.as_f64().map(|f| f as f32).ok_or_else(|| {
-                            ActError::invalid_args("Vector elements must be numbers")
-                        })
+                    .map(|v| match v {
+                        Cv::Float(f) => Ok(*f as f32),
+                        Cv::Integer(i) => {
+                            let n: i128 = (*i).into();
+                            Ok(n as f32)
+                        }
+                        _ => Err(ActError::invalid_args("Vector elements must be numbers")),
                     })
                     .collect();
-                let floats = floats?;
-                let bytes: Vec<u8> = floats.iter().flat_map(|f| f.to_le_bytes()).collect();
+                let bytes: Vec<u8> = floats?.iter().flat_map(|f| f.to_le_bytes()).collect();
                 Ok(Value::Blob(bytes))
             }
             _ => Err(ActError::invalid_args(
-                "Unsupported param type (use scalars or number arrays for vectors)",
+                "Unsupported param type (use scalars, byte strings, or number arrays)",
             )),
         })
         .collect()
-}
-
-fn sqlite_value_to_json(val: &Value) -> serde_json::Value {
-    match val {
-        Value::Null => serde_json::Value::Null,
-        Value::Integer(i) => serde_json::json!(i),
-        Value::Real(f) => serde_json::json!(f),
-        Value::Text(s) => serde_json::json!(s),
-        Value::Blob(b) => serde_json::json!(base64::engine::general_purpose::STANDARD.encode(b)),
-    }
 }
