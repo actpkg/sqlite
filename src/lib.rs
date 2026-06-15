@@ -1,14 +1,11 @@
 use act_sdk::prelude::*;
 use ciborium::value::Value as Cv;
 use rusqlite::{Connection, params_from_iter, types::Value};
-use std::sync::Mutex;
 
 act_sdk::embed_skill!("skill/");
 
 #[cfg(feature = "vec")]
 use {rusqlite::ffi::sqlite3_auto_extension, std::sync::Once};
-
-static DB: Mutex<Option<Connection>> = Mutex::new(None);
 
 #[cfg(feature = "vec")]
 static VEC_INIT: Once = Once::new();
@@ -21,40 +18,6 @@ fn ensure_vec_extension() {
             sqlite_vec::sqlite3_vec_init as *const (),
         )));
     });
-}
-
-fn get_or_open_db(path: &str) -> ActResult<()> {
-    let mut guard = DB
-        .lock()
-        .map_err(|e| ActError::internal(format!("Lock error: {e}")))?;
-    if guard.is_none() {
-        #[cfg(feature = "vec")]
-        ensure_vec_extension();
-
-        let conn = Connection::open(path)
-            .map_err(|e| ActError::internal(format!("Cannot open database: {e}")))?;
-        conn.execute_batch("PRAGMA journal_mode=WAL;")
-            .map_err(|e| ActError::internal(format!("PRAGMA error: {e}")))?;
-        *guard = Some(conn);
-    }
-    Ok(())
-}
-
-fn with_db<F, T>(path: &str, f: F) -> ActResult<T>
-where
-    F: FnOnce(&Connection) -> ActResult<T>,
-{
-    get_or_open_db(path)?;
-    let guard = DB
-        .lock()
-        .map_err(|e| ActError::internal(format!("Lock error: {e}")))?;
-    f(guard.as_ref().unwrap())
-}
-
-#[derive(Deserialize, JsonSchema)]
-struct Config {
-    /// Path to SQLite database file
-    database_path: String,
 }
 
 // ── Component definition ─────────────────────────────────────────────────────
@@ -71,6 +34,56 @@ struct Config {
 mod component {
     use super::*;
 
+    thread_local! {
+        static SESSIONS: SessionRegistry<Connection> = SessionRegistry::new("sqlite");
+    }
+
+    /// open-session args: which database file this session connects to.
+    #[derive(Deserialize, JsonSchema)]
+    #[schemars(crate = "act_sdk::__private::schemars")]
+    #[serde(crate = "act_sdk::__private::serde")]
+    pub struct OpenArgs {
+        /// Path to the SQLite database file.
+        database_path: String,
+    }
+
+    /// Per-call metadata: the session this call operates on.
+    #[derive(Deserialize)]
+    #[serde(crate = "act_sdk::__private::serde")]
+    pub struct ToolMeta {
+        #[serde(rename = "std:session-id")]
+        session_id: Option<String>,
+    }
+
+    #[session_open]
+    fn open(args: OpenArgs) -> ActResult<String> {
+        // Register the vec extension before Connection::open so sqlite3_auto_extension fires on this handle.
+        #[cfg(feature = "vec")]
+        ensure_vec_extension();
+        let conn = Connection::open(&args.database_path)
+            .map_err(|e| ActError::internal(format!("Cannot open database: {e}")))?;
+        conn.execute_batch("PRAGMA journal_mode=WAL;")
+            .map_err(|e| ActError::internal(format!("PRAGMA error: {e}")))?;
+        Ok(SESSIONS.with(|r| r.insert(conn)))
+    }
+
+    #[session_close]
+    fn close(session_id: String) {
+        SESSIONS.with(|r| {
+            r.remove(&session_id);
+        });
+    }
+
+    /// Run `f` against this session's connection, or `session-not-found`.
+    fn with_session<F, T>(id: &str, f: F) -> ActResult<T>
+    where
+        F: FnOnce(&Connection) -> ActResult<T>,
+    {
+        SESSIONS
+            .with(|r| r.with(id, f))
+            .ok_or_else(|| ActError::session_not_found(format!("Unknown session-id: {id}")))?
+    }
+
     /// Execute a SELECT query and return results as structured data.
     #[act_tool(
         description = "Execute a read-only SQL query (SELECT) and return results as array of row objects",
@@ -79,10 +92,14 @@ mod component {
     fn query(
         #[doc = "SQL SELECT query to execute"] sql: String,
         #[doc = "Query parameters as array (optional)"] params: Option<Vec<SqlValue>>,
-        ctx: &mut ActContext<Config>,
+        ctx: &mut ActContext<ToolMeta>,
     ) -> ActResult<Vec<Cv>> {
-        let path = ctx.metadata().database_path.clone();
-        with_db(&path, |conn| {
+        let id = ctx
+            .metadata()
+            .session_id
+            .clone()
+            .ok_or_else(|| ActError::session_not_found("Missing std:session-id metadata"))?;
+        with_session(&id, |conn| {
             let param_values = cbor_params_to_sqlite(params.as_deref())?;
             let mut stmt = conn
                 .prepare(&sql)
@@ -112,10 +129,14 @@ mod component {
     fn execute(
         #[doc = "SQL statement to execute"] sql: String,
         #[doc = "Statement parameters as array (optional)"] params: Option<Vec<SqlValue>>,
-        ctx: &mut ActContext<Config>,
+        ctx: &mut ActContext<ToolMeta>,
     ) -> ActResult<Cv> {
-        let path = ctx.metadata().database_path.clone();
-        with_db(&path, |conn| {
+        let id = ctx
+            .metadata()
+            .session_id
+            .clone()
+            .ok_or_else(|| ActError::session_not_found("Missing std:session-id metadata"))?;
+        with_session(&id, |conn| {
             let param_values = cbor_params_to_sqlite(params.as_deref())?;
             let affected = conn
                 .execute(&sql, params_from_iter(param_values.iter()))
@@ -129,9 +150,13 @@ mod component {
 
     /// List all tables in the database.
     #[act_tool(description = "List all tables in the SQLite database", read_only)]
-    fn list_tables(ctx: &mut ActContext<Config>) -> ActResult<Vec<Cv>> {
-        let path = ctx.metadata().database_path.clone();
-        with_db(&path, |conn| {
+    fn list_tables(ctx: &mut ActContext<ToolMeta>) -> ActResult<Vec<Cv>> {
+        let id = ctx
+            .metadata()
+            .session_id
+            .clone()
+            .ok_or_else(|| ActError::session_not_found("Missing std:session-id metadata"))?;
+        with_session(&id, |conn| {
             let mut stmt = conn.prepare(
                 "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name"
             ).map_err(|e| ActError::internal(format!("SQL error: {e}")))?;
@@ -160,10 +185,14 @@ mod component {
     )]
     fn describe_table(
         #[doc = "Table name to describe"] table: String,
-        ctx: &mut ActContext<Config>,
+        ctx: &mut ActContext<ToolMeta>,
     ) -> ActResult<Cv> {
-        let path = ctx.metadata().database_path.clone();
-        with_db(&path, |conn| {
+        let id = ctx
+            .metadata()
+            .session_id
+            .clone()
+            .ok_or_else(|| ActError::session_not_found("Missing std:session-id metadata"))?;
+        with_session(&id, |conn| {
             let exists: bool = conn.query_row(
                 "SELECT COUNT(*) > 0 FROM sqlite_master WHERE name = ?1 AND type IN ('table', 'view')",
                 [&table],
@@ -174,6 +203,7 @@ mod component {
                 return Err(ActError::not_found(format!("Table not found: {table}")));
             }
 
+            // PRAGMA does not accept bound parameters, so the (existence-checked) table name is escaped inline.
             let mut stmt = conn
                 .prepare(&format!(
                     "PRAGMA table_info('{}')",
@@ -222,10 +252,14 @@ mod component {
     #[act_tool(description = "Execute multiple SQL statements in a single transaction")]
     fn execute_batch(
         #[doc = "SQL statements separated by semicolons"] sql: String,
-        ctx: &mut ActContext<Config>,
+        ctx: &mut ActContext<ToolMeta>,
     ) -> ActResult<Cv> {
-        let path = ctx.metadata().database_path.clone();
-        with_db(&path, |conn| {
+        let id = ctx
+            .metadata()
+            .session_id
+            .clone()
+            .ok_or_else(|| ActError::session_not_found("Missing std:session-id metadata"))?;
+        with_session(&id, |conn| {
             conn.execute_batch(&sql)
                 .map_err(|e| ActError::invalid_args(format!("SQL error: {e}")))?;
             Ok(cbor_obj(vec![("status", Cv::from("ok"))]))

@@ -3,15 +3,13 @@
 
 POST {{baseurl}}/tools/execute
 {
-  "arguments": {"sql": "CREATE TABLE IF NOT EXISTS types_t (a, b, c, d)"},
-  "metadata": {"database_path": "{{db_path}}"}
+  "arguments": {"sql": "CREATE TABLE IF NOT EXISTS types_t (a, b, c, d)"}
 }
 HTTP 200
 
 POST {{baseurl}}/tools/execute
 {
-  "arguments": {"sql": "INSERT INTO types_t (a, b, c, d) VALUES (?1, ?2, ?3, ?4)", "params": [null, 3.5, true, false]},
-  "metadata": {"database_path": "{{db_path}}"}
+  "arguments": {"sql": "INSERT INTO types_t (a, b, c, d) VALUES (?1, ?2, ?3, ?4)", "params": [null, 3.5, true, false]}
 }
 HTTP 200
 [Asserts]
@@ -19,8 +17,7 @@ jsonpath "$.content[0].data.rows_affected" == 1
 
 POST {{baseurl}}/tools/query
 {
-  "arguments": {"sql": "SELECT a, b, c, d FROM types_t"},
-  "metadata": {"database_path": "{{db_path}}"}
+  "arguments": {"sql": "SELECT a, b, c, d FROM types_t"}
 }
 HTTP 200
 [Asserts]
