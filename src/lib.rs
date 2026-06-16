@@ -2,8 +2,6 @@ use act_sdk::prelude::*;
 use ciborium::value::Value as Cv;
 use rusqlite::{Connection, params_from_iter, types::Value};
 
-act_sdk::embed_skill!("skill/");
-
 #[cfg(feature = "vec")]
 use {rusqlite::ffi::sqlite3_auto_extension, std::sync::Once};
 
@@ -21,16 +19,10 @@ fn ensure_vec_extension() {
 }
 
 // ── Component definition ─────────────────────────────────────────────────────
-// Feature flag changes the component name and description only.
+// The sqlite-vec variant overrides the component name/description at pack
+// time via `act-build pack --set` (see the justfile) — the macro takes no args.
 
-#[cfg_attr(not(feature = "vec"), act_component)]
-#[cfg_attr(
-    feature = "vec",
-    act_component(
-        name = "sqlite-vec",
-        description = "SQLite database operations with vector search (sqlite-vec)"
-    )
-)]
+#[act_component]
 mod component {
     use super::*;
 
@@ -40,8 +32,6 @@ mod component {
 
     /// open-session args: which database file this session connects to.
     #[derive(Deserialize, JsonSchema)]
-    #[schemars(crate = "act_sdk::__private::schemars")]
-    #[serde(crate = "act_sdk::__private::serde")]
     pub struct OpenArgs {
         /// Path to the SQLite database file.
         database_path: String,
@@ -49,7 +39,6 @@ mod component {
 
     /// Per-call metadata: the session this call operates on.
     #[derive(Deserialize)]
-    #[serde(crate = "act_sdk::__private::serde")]
     pub struct ToolMeta {
         #[serde(rename = "std:session-id")]
         session_id: Option<String>,
