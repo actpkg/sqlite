@@ -23,10 +23,10 @@ jobs:
           - name: sqlite-vec
             artifact: component-sqlite-vec.wasm
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: moonrepo/setup-rust@v1
         with:
-          bins: wit-deps-cli, just
+          bins: wkg, just
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: bytecodealliance/setup-wasi-sdk-action@main
@@ -52,18 +52,16 @@ jobs:
             artifact: component-sqlite-vec.wasm
             hurl: "e2e/*.hurl e2e/vec/*.hurl"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.name }}
       - name: Test
         run: |
           DB_DIR=$(mktemp -d)
-          npx @actcore/act run --http --listen 3000 ${{ matrix.artifact }} \
-            --fs-policy allowlist \
-            --fs-allow /dev/urandom \
-            --fs-allow "$DB_DIR" &
-          npx wait-on -t 180s http://[::1]:3000/info
+          GRANT="{\"wasi:filesystem\":{\"mode\":\"allowlist\",\"allow\":[{\"path\":\"/dev/urandom\",\"mode\":\"rw\"},{\"path\":\"$DB_DIR\",\"mode\":\"rw\"}]}}"
+          npx @actcore/act run --http --listen 3000 ${{ matrix.artifact }} --grant "$GRANT" &
+          curl --retry 60 --retry-connrefused --retry-delay 1 -fsS -o /dev/null http://[::1]:3000/info
           npx @orangeopensource/hurl --test \
             --variable "baseurl=http://[::1]:3000" \
             --variable "db_path=$DB_DIR/test.db" \
@@ -78,10 +76,10 @@ jobs:
           - name: sqlite
           - name: sqlite-vec
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: moonrepo/setup-rust@v1
         with:
-          bins: wit-deps-cli, just
+          bins: wkg, just
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: bytecodealliance/setup-wasi-sdk-action@main
@@ -92,7 +90,7 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: moonrepo/setup-rust@v1
       - run: cargo fmt -- --check
 
@@ -102,30 +100,39 @@ jobs:
     needs: [e2e, clippy, fmt]
     runs-on: ubuntu-latest
     permissions:
-      packages: write
-      id-token: write
-      attestations: write
+      contents: read      # checkout
+      id-token: write     # keyless cosign signing via GitHub OIDC
     strategy:
       matrix:
         include:
           - name: sqlite
           - name: sqlite-vec
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.name }}
       - run: mkdir -p target/wasm32-wasip2/release && mv component-*.wasm target/wasm32-wasip2/release/component_sqlite.wasm
-      - uses: taiki-e/install-action@just
+      - uses: moonrepo/setup-rust@v1
+        with:
+          bins: just
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: sigstore/cosign-installer@v4.1.2   # defaults to cosign 3.x → OCI 1.1 referrer signatures
       - name: Publish
         id: publish
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # actpkg.dev PAT (any username; the registry detects the PAT by prefix).
+          OCI_USERNAME: __token__
+          OCI_PASSWORD: ${{ secrets.ACTPKG_TOKEN }}
+          # Source repo URL for org.opencontainers.image.source (read by act-build).
+          ACT_SOURCE: ${{ github.server_url }}/${{ github.repository }}
         run: just publish ${{ matrix.name }}
-      - name: Attest
+      - name: Sign (keyless via GitHub OIDC)
         if: steps.publish.outputs.digest != ''
-        uses: actions/attest@v4
-        with:
-          subject-name: ${{ steps.publish.outputs.image }}
-          subject-digest: ${{ steps.publish.outputs.digest }}
-          push-to-registry: true
+        env:
+          ACTPKG_TOKEN: ${{ secrets.ACTPKG_TOKEN }}
+          SUBJECT: ${{ steps.publish.outputs.image }}@${{ steps.publish.outputs.digest }}
+        run: |
+          echo "$ACTPKG_TOKEN" | cosign login actpkg.dev -u __token__ --password-stdin
+          cosign sign --yes "$SUBJECT"
