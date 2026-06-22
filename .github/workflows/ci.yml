@@ -23,7 +23,7 @@ jobs:
           - name: sqlite-vec
             artifact: component-sqlite-vec.wasm
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: moonrepo/setup-rust@v1
         with:
           bins: wit-deps-cli, just
@@ -52,7 +52,7 @@ jobs:
             artifact: component-sqlite-vec.wasm
             hurl: "e2e/*.hurl e2e/vec/*.hurl"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.name }}
@@ -78,7 +78,7 @@ jobs:
           - name: sqlite
           - name: sqlite-vec
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: moonrepo/setup-rust@v1
         with:
           bins: wit-deps-cli, just
@@ -92,7 +92,7 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: moonrepo/setup-rust@v1
       - run: cargo fmt -- --check
 
@@ -111,7 +111,7 @@ jobs:
           - name: sqlite
           - name: sqlite-vec
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.name }}
