@@ -30,6 +30,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: bytecodealliance/setup-wasi-sdk-action@main
+        with:
+          version: "33"
       - run: just init
       - run: just build ${{ matrix.name }}
       - run: cp target/wasm32-wasip2/release/component_sqlite.wasm ${{ matrix.artifact }}
@@ -83,6 +85,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: bytecodealliance/setup-wasi-sdk-action@main
+        with:
+          version: "33"
       - run: just init
       - run: just clippy ${{ matrix.name }}
 
@@ -119,6 +123,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: bytecodealliance/setup-wasi-sdk-action@main
+        with:
+          version: "33"
       - uses: sigstore/cosign-installer@v4.1.2   # defaults to cosign 3.x → OCI 1.1 referrer signatures
       - run: just init
       - name: Publish
