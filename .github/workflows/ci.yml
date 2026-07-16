@@ -62,7 +62,10 @@ jobs:
         run: |
           DB_DIR=$(mktemp -d)
           GRANT="{\"wasi:filesystem\":{\"mode\":\"allowlist\",\"allow\":[{\"path\":\"/dev/urandom\",\"mode\":\"rw\"},{\"path\":\"$DB_DIR\",\"mode\":\"rw\"}]}}"
-          npx @actcore/act run --http --listen 3000 ${{ matrix.artifact }} --grant "$GRANT" &
+          # sqlite is a session-provider (per-session DB connection); pre-open a
+          # session-of-1 so the stateless hurl tool calls resolve to it.
+          SESSION_ARGS="{\"database_path\":\"$DB_DIR/test.db\"}"
+          npx @actcore/act run --http --listen 3000 ${{ matrix.artifact }} --grant "$GRANT" --session-args "$SESSION_ARGS" &
           curl --retry 60 --retry-connrefused --retry-delay 1 -fsS -o /dev/null http://[::1]:3000/info
           npx @orangeopensource/hurl --test \
             --variable "baseurl=http://[::1]:3000" \
