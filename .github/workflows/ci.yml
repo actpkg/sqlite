@@ -61,7 +61,7 @@ jobs:
       - name: Test
         run: |
           DB_DIR=$(mktemp -d)
-          GRANT="{\"wasi:filesystem\":{\"mode\":\"allowlist\",\"allow\":[{\"path\":\"/dev/urandom\",\"mode\":\"rw\"},{\"path\":\"$DB_DIR\",\"mode\":\"rw\"}]}}"
+          GRANT="{\"wasi:filesystem\":{\"mode\":\"allowlist\",\"allow\":[{\"path\":\"/dev/urandom\",\"mode\":\"rw\"},{\"path\":\"$DB_DIR/**\",\"mode\":\"rw\"}]}}"
           # sqlite is a session-provider (per-session DB connection); pre-open a
           # session-of-1 so the stateless hurl tool calls resolve to it.
           SESSION_ARGS="{\"database_path\":\"$DB_DIR/test.db\"}"
