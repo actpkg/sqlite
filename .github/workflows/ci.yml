@@ -33,7 +33,11 @@ jobs:
         with:
           version: "33"
       - run: just init
-      - run: just build ${{ matrix.name }}
+      # `pack` (not `build`): the e2e job runs this artifact as-is, and an
+      # unpacked wasm carries no act:component section — no declared capability
+      # ceiling, so every wasi:filesystem access is denied whatever --grant says.
+      # Packing also applies the variant's std.name (sqlite-vec).
+      - run: just pack ${{ matrix.name }}
       - run: cp target/wasm32-wasip2/release/component_sqlite.wasm ${{ matrix.artifact }}
       - uses: actions/upload-artifact@v7
         with:
@@ -61,7 +65,7 @@ jobs:
       - name: Test
         run: |
           DB_DIR=$(mktemp -d)
-          GRANT="{\"wasi:filesystem\":{\"mode\":\"allowlist\",\"allow\":[{\"path\":\"/dev/urandom\",\"mode\":\"rw\"},{\"path\":\"$DB_DIR/**\",\"mode\":\"rw\"}]}}"
+          GRANT="{\"wasi:filesystem\":{\"mode\":\"allowlist\",\"allow\":[{\"path\":\"/dev/urandom\",\"mode\":\"rw\"},{\"path\":\"$DB_DIR\",\"mode\":\"rw\"}]}}"
           # sqlite is a session-provider (per-session DB connection); pre-open a
           # session-of-1 so the stateless hurl tool calls resolve to it.
           SESSION_ARGS="{\"database_path\":\"$DB_DIR/test.db\"}"
