@@ -1,6 +1,8 @@
 wasm := "target/wasm32-wasip2/release/component_sqlite.wasm"
-# OCI reference to publish to (registry/namespace/name, no tag). Override with OCI_REF.
-component_ref := env("OCI_REF", "actpkg.dev/library/sqlite")
+# Registry/namespace to publish to (no name, no tag). The component name comes
+# from the packed manifest, so each matrix variant lands on its own repo
+# (sqlite, sqlite-vec). Override with OCI_REGISTRY.
+registry := env("OCI_REGISTRY", "actpkg.dev/library")
 
 act := env("ACT", "npx @actcore/act")
 actbuild := env("ACT_BUILD", "npx @actcore/act-build")
@@ -65,13 +67,14 @@ publish variant="sqlite": (pack variant)
     #!/usr/bin/env bash
     set -euo pipefail
     INFO=$({{act}} inspect component-manifest {{wasm}})
+    NAME=$(echo "$INFO" | jq -r .std.name)
     VERSION=$(echo "$INFO" | jq -r .std.version)
-    OUTPUT=$({{actbuild}} push {{wasm}} "{{component_ref}}:$VERSION" \
+    OUTPUT=$({{actbuild}} push {{wasm}} "{{registry}}/$NAME:$VERSION" \
       --skip-if-exists \
       --also-tag latest 2>&1) || { echo "$OUTPUT" >&2; exit 1; }
     echo "$OUTPUT"
     DIGEST=$(echo "$OUTPUT" | grep "^Digest:" | awk '{print $2}' || true)
     if [ -n "${GITHUB_OUTPUT:-}" ]; then
-      echo "image={{component_ref}}" >> "$GITHUB_OUTPUT"
+      echo "image={{registry}}/$NAME" >> "$GITHUB_OUTPUT"
       echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
     fi
