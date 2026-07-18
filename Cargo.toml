@@ -10,7 +10,7 @@ vec = ["dep:sqlite-vec"]
 
 [dependencies]
 act-sdk = "0.12"
-wit-bindgen = { version = "0.58", features = ["async-spawn"] }
+wit-bindgen = { version = "0.59", features = ["async-spawn"] }
 serde = { version = "1", features = ["derive"] }
 schemars = "1"
 ciborium = "0.2"
