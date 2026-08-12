@@ -53,28 +53,30 @@ jobs:
         include:
           - name: sqlite
             artifact: component-sqlite.wasm
-            hurl: "e2e/*.hurl"
           - name: sqlite-vec
             artifact: component-sqlite-vec.wasm
-            hurl: "e2e/*.hurl e2e/vec/*.hurl"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.name }}
-      - name: Test
-        run: |
-          DB_DIR=$(mktemp -d)
-          GRANT="{\"wasi:filesystem\":{\"mode\":\"allowlist\",\"allow\":[{\"path\":\"/dev/urandom\",\"mode\":\"rw\"},{\"path\":\"$DB_DIR\",\"mode\":\"rw\"}]}}"
-          # sqlite is a session-provider (per-session DB connection); pre-open a
-          # session-of-1 so the stateless hurl tool calls resolve to it.
-          SESSION_ARGS="{\"database_path\":\"$DB_DIR/test.db\"}"
-          npx @actcore/act run --http --listen 3000 ${{ matrix.artifact }} --grant "$GRANT" --session-args "$SESSION_ARGS" &
-          curl --retry 60 --retry-connrefused --retry-delay 1 -fsS -o /dev/null http://[::1]:3000/info
-          npx @orangeopensource/hurl --test \
-            --variable "baseurl=http://[::1]:3000" \
-            --variable "db_path=$DB_DIR/test.db" \
-            ${{ matrix.hurl }}
+      - uses: moonrepo/setup-rust@v1
+        with:
+          bins: wkg, just
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: bytecodealliance/setup-wasi-sdk-action@main
+        with:
+          version: "33"
+      - uses: astral-sh/setup-uv@v6
+      - run: just init
+      # The suite drives `act run --mcp` over stdio per test, opening its own
+      # session via the virtual open_session/close_session tools (ACT-MCP
+      # §4.1) rather than the host's `--session-args` session-of-1 shortcut —
+      # see e2e/conftest.py. `just test` rebuilds+packs the named variant
+      # itself, same as `build` above; the downloaded artifact is not
+      # consumed here (kept for symmetry with the other component CIs).
+      - run: just test ${{ matrix.name }}
 
   clippy:
     name: Clippy (${{ matrix.name }})

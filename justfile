@@ -6,16 +6,7 @@ registry := env("OCI_REGISTRY", "actpkg.dev/library")
 
 act := env("ACT", "npx @actcore/act")
 actbuild := env("ACT_BUILD", "npx @actcore/act-build")
-hurl := env("HURL", "hurl")
 cc := env("CC", "/opt/wasi-sdk/bin/clang")
-# Random port for the e2e server, in a safe range: above the well-known/common
-# dev ports and below the Linux outbound ephemeral range (32768+).
-port := `shuf -i 10000-29999 -n 1`
-addr := "[::1]:" + port
-baseurl := "http://" + addr
-port2 := `shuf -i 10000-29999 -n 1`
-addr2 := "[::1]:" + port2
-baseurl2 := "http://" + addr2
 
 # Fetch WIT deps from the registry (ghcr.io/actcore) into wit/deps/.
 # wkg-registry.toml maps the act namespace -> actcore.dev (well-known -> ghcr.io/actcore).
@@ -36,32 +27,8 @@ clippy variant="sqlite":
 pack variant="sqlite": (build variant)
     {{actbuild}} pack {{wasm}} {{ if variant == "sqlite-vec" { '--set std.name=sqlite-vec --set "std.description=SQLite database operations with vector search (sqlite-vec)"' } else { "" } }}
 
-test variant="sqlite":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    just pack {{variant}}
-    DB_DIR=$(mktemp -d)
-    GRANT="{\"wasi:filesystem\":{\"mode\":\"allowlist\",\"allow\":[{\"path\":\"/dev/urandom\",\"mode\":\"rw\"},{\"path\":\"$DB_DIR\",\"mode\":\"rw\"}]}}"
-    # Mode 1: session-of-1 (single-DB deployment). Host pre-opens the session and
-    # injects std:session-id into every call; existing tests need no db_path.
-    {{act}} run --http --listen "{{addr}}" {{wasm}} \
-      --session-args "{\"database_path\":\"$DB_DIR/test.db\"}" \
-      --grant "$GRANT" &
-    PID=$!
-    curl --retry 60 --retry-connrefused --retry-delay 1 -fsS -o /dev/null {{baseurl}}/info
-    if [ "{{variant}}" = "sqlite-vec" ]; then
-      {{hurl}} --test --variable "baseurl={{baseurl}}" e2e/*.hurl e2e/vec/*.hurl
-    else
-      {{hurl}} --test --variable "baseurl={{baseurl}}" e2e/*.hurl
-    fi
-    kill $PID; wait $PID 2>/dev/null || true
-    # Mode 2: full session-provider — isolation across two sessions/DBs.
-    {{act}} run --http --listen "{{addr2}}" {{wasm}} \
-      --grant "$GRANT" &
-    PID=$!
-    trap "kill $PID 2>/dev/null; rm -rf $DB_DIR" EXIT
-    curl --retry 60 --retry-connrefused --retry-delay 1 -fsS -o /dev/null {{baseurl2}}/info
-    {{hurl}} --test --variable "baseurl={{baseurl2}}" --variable "db_dir=$DB_DIR" e2e/isolation/*.hurl
+test variant="sqlite": (pack variant)
+    SQLITE_VARIANT="{{variant}}" ACT="{{act}}" uv run --project e2e pytest e2e/ -v
 
 publish variant="sqlite": (pack variant)
     #!/usr/bin/env bash
