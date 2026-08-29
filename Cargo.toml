@@ -13,7 +13,7 @@ act-sdk = "0.14"
 serde = { version = "1", features = ["derive"] }
 schemars = "1"
 ciborium = "0.2"
-rusqlite = { version = "0.39.0", features = ["bundled"] }
+rusqlite = { version = "0.40.1", features = ["bundled"] }
 sqlite-vec = { version = "0.1", optional = true }
 
 [profile.release]
