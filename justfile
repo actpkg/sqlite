@@ -27,8 +27,13 @@ clippy variant="sqlite":
 pack variant="sqlite": (build variant)
     {{actbuild}} pack {{wasm}} {{ if variant == "sqlite-vec" { '--set std.name=sqlite-vec --set "std.description=SQLite database operations with vector search (sqlite-vec)"' } else { "" } }}
 
+# Rust e2e harness (rmcp client) — replaced the python fastmcp/pytest suite
+# (test_*.py + conftest.py kept next to it as the assertion reference). Must
+# run from inside e2e/: cargo discovers config from the CWD, and e2e/ carries
+# the host-target pin. `pack` (not bare `build`) is the dependency on purpose:
+# an unpacked wasm declares no ceiling, so every grant is refused.
 test variant="sqlite": (pack variant)
-    SQLITE_VARIANT="{{variant}}" ACT="{{act}}" uv run --project e2e pytest e2e/ -v
+    cd e2e && ACT="{{act}}" WASM="../{{wasm}}" SQLITE_VARIANT="{{variant}}" cargo test
 
 publish variant="sqlite": (pack variant)
     #!/usr/bin/env bash
