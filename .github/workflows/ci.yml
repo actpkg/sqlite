@@ -31,7 +31,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: bytecodealliance/setup-wasi-sdk-action@main
         with:
-          version: "33"
+          version: "34"
       - run: just init
       # `pack` (not `build`): the e2e job runs this artifact as-is, and an
       # unpacked wasm carries no act:component section — no declared capability
@@ -67,7 +67,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: bytecodealliance/setup-wasi-sdk-action@main
         with:
-          version: "33"
+          version: "34"
       - run: just init
       # The suite drives `act run --mcp` over stdio per test, opening its own
       # session via the virtual open_session/close_session tools (ACT-MCP
@@ -94,7 +94,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: bytecodealliance/setup-wasi-sdk-action@main
         with:
-          version: "33"
+          version: "34"
       - run: just init
       - run: just clippy ${{ matrix.name }}
 
@@ -132,7 +132,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: bytecodealliance/setup-wasi-sdk-action@main
         with:
-          version: "33"
+          version: "34"
       - uses: sigstore/cosign-installer@v4.1.2   # defaults to cosign 3.x → OCI 1.1 referrer signatures
       - run: just init
       - name: Publish
