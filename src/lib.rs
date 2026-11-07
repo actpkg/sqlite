@@ -26,9 +26,12 @@ fn ensure_vec_extension() {
 mod component {
     use super::*;
 
-    thread_local! {
-        static SESSIONS: SessionRegistry<Connection> = SessionRegistry::new("sqlite");
-    }
+    // A plain `static`, not `thread_local!`: under wasip3 every host fiber
+    // gets its own TLS, so a `thread_local` registry would be repopulated
+    // from scratch on every tool call and no session would survive between
+    // them. See the `act_sdk::sessions` module docs.
+    static SESSIONS: std::sync::LazyLock<SessionRegistry<Connection>> =
+        std::sync::LazyLock::new(|| SessionRegistry::new("sqlite"));
 
     /// open-session args: which database file this session connects to.
     #[derive(Deserialize, JsonSchema)]
@@ -53,14 +56,12 @@ mod component {
             .map_err(|e| ActError::internal(format!("Cannot open database: {e}")))?;
         conn.execute_batch("PRAGMA journal_mode=WAL;")
             .map_err(|e| ActError::internal(format!("PRAGMA error: {e}")))?;
-        Ok(SESSIONS.with(|r| r.insert(conn)))
+        Ok(SESSIONS.insert(conn))
     }
 
     #[session_close]
     fn close(session_id: String) {
-        SESSIONS.with(|r| {
-            r.remove(&session_id);
-        });
+        SESSIONS.remove(&session_id);
     }
 
     /// Run `f` against this session's connection, or `session-not-found`.
@@ -69,7 +70,7 @@ mod component {
         F: FnOnce(&Connection) -> ActResult<T>,
     {
         SESSIONS
-            .with(|r| r.with(id, f))
+            .with(id, f)
             .ok_or_else(|| ActError::session_not_found(format!("Unknown session-id: {id}")))?
     }
 

@@ -185,7 +185,7 @@ async fn close_session(client: &Client, sid: &str) {
 async fn call(client: &Client, tool: &str, args: Value) -> rmcp::model::CallToolResult {
     client
         .call_tool(
-            CallToolRequestParams::new(tool)
+            CallToolRequestParams::new(tool.to_string())
                 .with_arguments(args.as_object().expect("tool args are an object").clone()),
         )
         .await
@@ -362,7 +362,7 @@ async fn create_insert_query() {
         "_meta": h.meta(),
     }))
     .await;
-    assert_num_eq(structured(&insert)["rows_affected"], 1.0, "rows_affected");
+    assert_num_eq(&structured(&insert)["rows_affected"], 1.0, "rows_affected");
 
     let result = call(&h.client, "query", json!({
         "sql": "SELECT * FROM users",
@@ -481,7 +481,7 @@ async fn blob_roundtrip() {
         "_meta": h.meta(),
     }))
     .await;
-    assert_num_eq(structured(&insert)["rows_affected"], 1.0, "rows_affected");
+    assert_num_eq(&structured(&insert)["rows_affected"], 1.0, "rows_affected");
 
     let result = call(&h.client, "query", json!({
         "sql": "SELECT data FROM blobs WHERE id = 1",
@@ -593,7 +593,7 @@ async fn null_float_bool_params() {
         "_meta": h.meta(),
     }))
     .await;
-    assert_num_eq(structured(&insert)["rows_affected"], 1.0, "rows_affected");
+    assert_num_eq(&structured(&insert)["rows_affected"], 1.0, "rows_affected");
 
     let result = call(&h.client, "query", json!({
         "sql": "SELECT a, b, c, d FROM types_t",
@@ -633,7 +633,7 @@ async fn parameterized_insert_and_query() {
         "_meta": h.meta(),
     }))
     .await;
-    assert_num_eq(structured(&insert)["rows_affected"], 1.0, "rows_affected");
+    assert_num_eq(&structured(&insert)["rows_affected"], 1.0, "rows_affected");
 
     let result = call(&h.client, "query", json!({
         "sql": "SELECT val FROM params_test WHERE val = ?1",
@@ -651,7 +651,7 @@ async fn parameterized_insert_and_query() {
         "_meta": h.meta(),
     }))
     .await;
-    assert_num_eq(structured(&multi)["rows_affected"], 2.0, "rows_affected");
+    assert_num_eq(&structured(&multi)["rows_affected"], 2.0, "rows_affected");
 
     h.shutdown().await;
 }
@@ -675,14 +675,14 @@ async fn update_and_delete() {
         "_meta": h.meta(),
     }))
     .await;
-    assert_num_eq(structured(&insert)["rows_affected"], 3.0, "rows_affected");
+    assert_num_eq(&structured(&insert)["rows_affected"], 3.0, "rows_affected");
 
     let update = call(&h.client, "execute", json!({
         "sql": "UPDATE items SET qty = 20 WHERE name = 'apple'",
         "_meta": h.meta(),
     }))
     .await;
-    assert_num_eq(structured(&update)["rows_affected"], 1.0, "rows_affected");
+    assert_num_eq(&structured(&update)["rows_affected"], 1.0, "rows_affected");
 
     let verify = call(&h.client, "query", json!({
         "sql": "SELECT qty FROM items WHERE name = 'apple'",
@@ -698,7 +698,7 @@ async fn update_and_delete() {
         "_meta": h.meta(),
     }))
     .await;
-    assert_num_eq(structured(&delete)["rows_affected"], 2.0, "rows_affected");
+    assert_num_eq(&structured(&delete)["rows_affected"], 2.0, "rows_affected");
 
     let remaining = call(&h.client, "query", json!({
         "sql": "SELECT COUNT(*) as cnt FROM items",
@@ -739,7 +739,7 @@ async fn vec0_knn_search() {
         "_meta": h.meta(),
     }))
     .await;
-    assert_num_eq(structured(&insert)["rows_affected"], 1.0, "rows_affected");
+    assert_num_eq(&structured(&insert)["rows_affected"], 1.0, "rows_affected");
 
     call(&h.client, "execute", json!({
         "sql": "INSERT INTO embeddings (rowid, embedding) VALUES (?1, ?2)",

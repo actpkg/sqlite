@@ -1,4 +1,4 @@
-wasm := "target/wasm32-wasip2/release/component_sqlite.wasm"
+wasm := "target/wasm32-wasip3/release/component_sqlite.wasm"
 # Registry/namespace to publish to (no name, no tag). The component name comes
 # from the packed manifest, so each matrix variant lands on its own repo
 # (sqlite, sqlite-vec). Override with OCI_REGISTRY.

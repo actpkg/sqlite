@@ -1,6 +1,6 @@
 [package]
 name = "component-sqlite"
-version = "0.4.4"
+version = "0.4.6"
 description = "SQLite database operations"
 edition = "2024"
 
@@ -9,7 +9,7 @@ default = []
 vec = ["dep:sqlite-vec"]
 
 [dependencies]
-act-sdk = "0.14"
+act-sdk = "0.14.3"
 serde = { version = "1", features = ["derive"] }
 schemars = "1"
 ciborium = "0.2"

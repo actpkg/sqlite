@@ -38,7 +38,7 @@ jobs:
       # ceiling, so every wasi:filesystem access is denied whatever --grant says.
       # Packing also applies the variant's std.name (sqlite-vec).
       - run: just pack ${{ matrix.name }}
-      - run: cp target/wasm32-wasip2/release/component_sqlite.wasm ${{ matrix.artifact }}
+      - run: cp target/wasm32-wasip3/release/component_sqlite.wasm ${{ matrix.artifact }}
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}
@@ -68,7 +68,6 @@ jobs:
       - uses: bytecodealliance/setup-wasi-sdk-action@main
         with:
           version: "33"
-      - uses: astral-sh/setup-uv@v6
       - run: just init
       # The suite drives `act run --mcp` over stdio per test, opening its own
       # session via the virtual open_session/close_session tools (ACT-MCP
@@ -125,7 +124,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.name }}
-      - run: mkdir -p target/wasm32-wasip2/release && mv component-*.wasm target/wasm32-wasip2/release/component_sqlite.wasm
+      - run: mkdir -p target/wasm32-wasip3/release && mv component-*.wasm target/wasm32-wasip3/release/component_sqlite.wasm
       - uses: moonrepo/setup-rust@v1
         with:
           bins: wkg, just
